@@ -20,6 +20,14 @@ export type ChatEvent =
 
 const HISTORY_TOKEN_BUDGET = 40_000;
 
+/** Provisional title from the first message, so the sidebar is useful immediately (the AI may refine it). */
+export function provisionalTitle(text: string): string {
+  const firstLine = text.replace(/\s+/g, " ").trim();
+  if (firstLine.length <= 60) return firstLine;
+  const cut = firstLine.slice(0, 60);
+  return `${cut.slice(0, cut.lastIndexOf(" ") > 30 ? cut.lastIndexOf(" ") : 60)}…`;
+}
+
 export async function getOwnedConversation(userId: string, conversationId: string) {
   const [conv] = await getDb()
     .select()
@@ -123,6 +131,9 @@ export async function runChatTurn(params: {
       .returning();
   }
   await onEvent({ type: "user_message", message: userMessage });
+  if (conversation.title === "New conversation" && !all.some((m) => m.role === "user" && m.id !== userMessage.id)) {
+    await db.update(conversations).set({ title: provisionalTitle(userMessage.content) }).where(eq(conversations.id, conversation.id));
+  }
 
   // ── Assemble context ──────────────────────────────────────────────────────
   const fresh = await liveMessages(conversation.id);

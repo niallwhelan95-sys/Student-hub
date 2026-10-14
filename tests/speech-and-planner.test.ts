@@ -98,4 +98,21 @@ describe("planner and next step", () => {
     const dash = await c.json("GET", "/api/dashboard");
     expect(dash.body.deadlines[0].title).toBe("Exam");
   });
+
+  it("counts each module's documents and gives new conversations a provisional title", async () => {
+    const app = await setupTestApp();
+    const c = new Client(app);
+    await c.register();
+    const mod = await c.json("POST", "/api/modules", { code: "DB201", name: "Database Systems" });
+    await c.upload("notes.txt", Buffer.from("Normalisation removes redundancy from relational tables."), { moduleId: mod.body.module.id });
+    const dash = await c.json("GET", "/api/dashboard");
+    expect(dash.body.modules[0].documentCount).toBe(1);
+    const list = await c.json("GET", "/api/modules");
+    expect(list.body.modules[0].documentCount).toBe(1);
+
+    const conv = await c.json("POST", "/api/conversations", {});
+    await c.chat(conv.body.conversation.id, { content: "Can you explain third normal form with a simple example from a student records table please?" });
+    const convs = await c.json("GET", "/api/conversations");
+    expect(convs.body.conversations[0].title).toBe("Can you explain third normal form with a simple example…");
+  });
 });

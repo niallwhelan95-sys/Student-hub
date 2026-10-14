@@ -1,4 +1,5 @@
-import { and, eq } from "drizzle-orm";
+import { and, asc, eq } from "drizzle-orm";
+import { provisionalTitle } from "./service";
 import { z } from "zod";
 import { getDb } from "../db/client";
 import { conversations, messages, modules } from "../db/schema";
@@ -80,7 +81,15 @@ ${existing.map((m) => `- id=${m.id} [${m.category}${m.status === "proposed" ? ",
   if (!result) return;
 
   const patch: Partial<typeof conversations.$inferInsert> = {};
-  if (result.title && GENERIC_TITLE.test(conv.title.trim())) patch.title = result.title.slice(0, 80);
+  // Replace generic or provisional (first-message) titles, never one the student set themselves.
+  const [firstUser] = await db
+    .select({ content: messages.content })
+    .from(messages)
+    .where(and(eq(messages.conversationId, conv.id), eq(messages.role, "user")))
+    .orderBy(asc(messages.createdAt))
+    .limit(1);
+  const provisional = firstUser ? provisionalTitle(firstUser.content) : null;
+  if (result.title && (GENERIC_TITLE.test(conv.title.trim()) || conv.title === provisional)) patch.title = result.title.slice(0, 80);
   if (result.workingContext) patch.workingContext = { ...result.workingContext, updatedAt: new Date().toISOString() };
   if (Object.keys(patch).length) await db.update(conversations).set(patch).where(eq(conversations.id, conv.id));
 
@@ -120,10 +129,3 @@ ${existing.map((m) => `- id=${m.id} [${m.category}${m.status === "proposed" ? ",
 registerJob("conversation.after_turn", {
   run: async (p) => afterTurn(String(p.conversationId), String(p.userMessageId), String(p.assistantMessageId)),
 });
-
-export async function setConversationTitleIfGeneric(userId: string, conversationId: string, title: string) {
-  await getDb()
-    .update(conversations)
-    .set({ title: title.slice(0, 80) })
-    .where(and(eq(conversations.id, conversationId), eq(conversations.userId, userId), eq(conversations.title, "New conversation")));
-}

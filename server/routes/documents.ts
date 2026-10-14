@@ -128,7 +128,9 @@ documentRoutes.get("/:id/file", async (c) => {
     "content-type": doc.mimeType,
     "content-disposition": `${inline ? "inline" : "attachment"}; filename*=UTF-8''${encodeURIComponent(doc.filename)}`,
     "x-content-type-options": "nosniff",
-    "content-security-policy": "default-src 'none'; img-src 'self'; style-src 'unsafe-inline'; sandbox",
+    // Chrome's PDF viewer won't render under a CSP sandbox; every other type gets the strict policy.
+    "content-security-policy":
+      doc.mimeType === "application/pdf" ? "default-src 'none'; object-src 'self'; frame-ancestors 'self'" : "default-src 'none'; img-src 'self'; style-src 'unsafe-inline'; sandbox",
     "cache-control": "private, max-age=300",
   });
 });

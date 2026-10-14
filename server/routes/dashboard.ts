@@ -114,7 +114,7 @@ dashboardRoutes.get("/", async (c) => {
         code: modules.code,
         name: modules.name,
         color: modules.color,
-        documentCount: sql<number>`(SELECT count(*)::int FROM documents d WHERE d.module_id = ${modules.id})`,
+        documentCount: sql<number>`(SELECT count(*)::int FROM documents d WHERE d.module_id = "modules"."id")`,
       })
       .from(modules)
       .where(and(eq(modules.userId, user.id), eq(modules.archived, false)))

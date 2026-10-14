@@ -32,9 +32,9 @@ moduleRoutes.get("/", async (c) => {
       color: modules.color,
       archived: modules.archived,
       description: modules.description,
-      documentCount: sql<number>`(SELECT count(*)::int FROM documents d WHERE d.module_id = ${modules.id})`,
-      conversationCount: sql<number>`(SELECT count(*)::int FROM conversations cv WHERE cv.module_id = ${modules.id} AND NOT cv.archived)`,
-      nextDeadline: sql<string | null>`(SELECT min(due_at) FROM deadlines dl WHERE dl.module_id = ${modules.id} AND dl.status = 'confirmed' AND dl.due_at > now())`,
+      documentCount: sql<number>`(SELECT count(*)::int FROM documents d WHERE d.module_id = "modules"."id")`,
+      conversationCount: sql<number>`(SELECT count(*)::int FROM conversations cv WHERE cv.module_id = "modules"."id" AND NOT cv.archived)`,
+      nextDeadline: sql<string | null>`(SELECT min(due_at) FROM deadlines dl WHERE dl.module_id = "modules"."id" AND dl.status = 'confirmed' AND dl.due_at > now())`,
     })
     .from(modules)
     .where(eq(modules.userId, user.id))

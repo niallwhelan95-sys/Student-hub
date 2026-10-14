@@ -103,6 +103,11 @@ export function splitByHeadings(text: string, labelPrefix = "Section"): Extracte
   return sections;
 }
 
+/** The document's first heading (usually its title), even if no text sits directly under it. */
+export function firstHeading(text: string): string | undefined {
+  return text.match(/^#{1,6}\s+(.+)$/m)?.[1].trim().slice(0, 160);
+}
+
 async function extractDocx(buf: Buffer): Promise<Extraction> {
   const result = await mammoth.convertToHtml({ buffer: buf });
   const text = htmlToStructuredText(result.value);
@@ -110,9 +115,7 @@ async function extractDocx(buf: Buffer): Promise<Extraction> {
     .filter((m) => m.type === "warning")
     .slice(0, 3)
     .map((m) => m.message);
-  const sections = splitByHeadings(text);
-  const firstHeading = sections.find((s) => s.heading)?.heading;
-  return { sections, title: firstHeading, method: "docx-mammoth", warnings };
+  return { sections: splitByHeadings(text), title: firstHeading(text), method: "docx-mammoth", warnings };
 }
 
 // ── PPTX ───────────────────────────────────────────────────────────────────────
@@ -260,7 +263,7 @@ function extractText(buf: Buffer, kind: "text" | "code", ext: string): Extractio
     return { sections: sections.filter((s) => s.text.trim()), method: "code", warnings: [] };
   }
   const sections = /^#{1,6}\s/m.test(text) ? splitByHeadings(text) : [{ label: "Text", text: normaliseWhitespace(text) }];
-  return { sections: sections.filter((s) => s.text.trim()), title: sections.find((s) => s.heading)?.heading, method: "text", warnings: [] };
+  return { sections: sections.filter((s) => s.text.trim()), title: firstHeading(text), method: "text", warnings: [] };
 }
 
 export async function extractDocument(kind: FileKind, buf: Buffer, ext: string): Promise<Extraction> {
