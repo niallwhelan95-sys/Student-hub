@@ -1,3 +1,5 @@
+// Applied by the migration runner in ../client.ts. Add new migrations as new numbered modules and list them in ./index.ts.
+export default `
 -- Margin initial schema. Works on PGlite (local) and hosted Postgres with pgvector.
 CREATE EXTENSION IF NOT EXISTS vector;
 
@@ -262,3 +264,4 @@ CREATE TABLE ai_usage (
   created_at timestamptz NOT NULL DEFAULT now()
 );
 CREATE INDEX ai_usage_user_idx ON ai_usage(user_id, created_at);
+`;

@@ -1,0 +1,6 @@
+{
+  "$schema": "https://openapi.vercel.sh/vercel.json",
+  "installCommand": "npm ci && rm -rf node_modules/onnxruntime-node node_modules/onnxruntime-web node_modules/@huggingface node_modules/@electric-sql",
+  "buildCommand": "npm run build:vercel",
+  "rewrites": [{ "source": "/((?!api/).*)", "destination": "/index.html" }]
+}

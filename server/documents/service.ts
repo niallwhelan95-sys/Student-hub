@@ -26,14 +26,31 @@ const stem = (filename: string) =>
     .replace(/[^a-z0-9]+/g, " ")
     .trim();
 
-/** Validate and store an upload, then queue it for processing. Exact duplicates are not re-processed. */
-export async function ingestUpload(params: {
+type IngestParams = {
   userId: string;
   filename: string;
   data: Buffer;
   moduleId?: string | null;
   conversationId?: string | null;
-}): Promise<IngestResult> {
+  /** Set when the browser already uploaded the bytes straight to storage (Vercel Blob client upload). */
+  storedKey?: string;
+};
+
+/** Validate and store an upload, then queue it for processing. Exact duplicates are not re-processed. */
+export async function ingestUpload(params: IngestParams): Promise<IngestResult> {
+  try {
+    const result = await ingest(params);
+    // A pre-uploaded copy that turned out to be a duplicate isn't needed.
+    if (params.storedKey && result.document.storageKey !== params.storedKey) await getStorage().remove(params.storedKey).catch(() => {});
+    return result;
+  } catch (err) {
+    // Rejected files (wrong type, too large…) must not linger in storage.
+    if (params.storedKey) await getStorage().remove(params.storedKey).catch(() => {});
+    throw err;
+  }
+}
+
+async function ingest(params: IngestParams): Promise<IngestResult> {
   const { userId, data } = params;
   const filename = path.basename(params.filename).slice(0, 200) || "upload";
   if (data.length > env.MAX_UPLOAD_MB * 1024 * 1024) throw badRequest(`Files must be under ${env.MAX_UPLOAD_MB} MB.`);
@@ -77,7 +94,7 @@ export async function ingestUpload(params: {
     for (const c of candidates) if (stem(c.filename) === myStem) related.push({ id: c.id, filename: c.filename, relation: "possible_revision" });
   }
 
-  const storageKey = await getStorage().put(userId, data, detection.ext);
+  const storageKey = params.storedKey ?? (await getStorage().put(userId, data, detection.ext, detection.mimeType));
   const [doc] = await db
     .insert(documents)
     .values({

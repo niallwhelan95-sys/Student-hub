@@ -1,6 +1,6 @@
 import fs from "node:fs";
 import path from "node:path";
-import { Hono } from "hono";
+import { Hono, type MiddlewareHandler } from "hono";
 import { secureHeaders } from "hono/secure-headers";
 import { serveStatic } from "@hono/node-server/serve-static";
 import { ZodError } from "zod";
@@ -23,8 +23,10 @@ import "./documents/service";
 import "./chat/afterTurn";
 import "./writing/service";
 
-export function createApp(opts: { staticDir?: string } = {}) {
+export function createApp(opts: { staticDir?: string; prepare?: MiddlewareHandler } = {}) {
   const app = new Hono<{ Variables: AppVariables }>();
+  // Serverless hosts use this to initialise the database / kick background work per request.
+  if (opts.prepare) app.use("*", opts.prepare);
 
   app.use(
     "*",
@@ -35,7 +37,8 @@ export function createApp(opts: { staticDir?: string } = {}) {
         styleSrc: ["'self'", "'unsafe-inline'"],
         imgSrc: ["'self'", "data:", "blob:"],
         fontSrc: ["'self'", "data:"],
-        connectSrc: ["'self'"],
+        // Vercel Blob client uploads go straight from the browser to Blob storage.
+        connectSrc: ["'self'", "https://vercel.com", "https://*.vercel-storage.com"],
         mediaSrc: ["'self'", "blob:"],
         frameSrc: ["'self'"],
         objectSrc: ["'none'"],

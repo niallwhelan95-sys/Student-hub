@@ -2,7 +2,7 @@
 
 export type User = { id: string; email: string; displayName: string };
 
-export type Capabilities = { ai: boolean; semanticSearch: boolean; serverTranscription: boolean; maxUploadMb: number };
+export type Capabilities = { ai: boolean; semanticSearch: boolean; serverTranscription: boolean; directUploads: boolean; maxUploadMb: number };
 
 export type Me = { user: User | null; registrationOpen: boolean; capabilities: Capabilities };
 

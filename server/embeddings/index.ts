@@ -1,6 +1,7 @@
 import path from "node:path";
 import { createHash } from "node:crypto";
 import { env } from "../env";
+import { importOptional } from "../lib/optional";
 
 export type EmbedKind = "query" | "document";
 
@@ -21,7 +22,8 @@ class LocalEmbedder implements Embedder {
   private load() {
     if (!this.extractor) {
       this.extractor = (async () => {
-        const { pipeline, env: tenv } = await import("@huggingface/transformers");
+        // Local-only dependency (≈300 MB native runtime); kept out of serverless bundles on purpose.
+        const { pipeline, env: tenv } = await importOptional<typeof import("@huggingface/transformers")>("@huggingface/transformers");
         tenv.cacheDir = path.resolve(env.MODEL_CACHE_DIR);
         const pipe = await pipeline("feature-extraction", "Xenova/bge-small-en-v1.5", { dtype: "q8" });
         return pipe as unknown as (texts: string[], opts: object) => Promise<{ tolist(): number[][] }>;

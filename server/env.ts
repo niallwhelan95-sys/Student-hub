@@ -24,7 +24,14 @@ const EnvSchema = z.object({
   AI_BACKGROUND_MODEL: z.string().default("claude-opus-5-5"),
   AI_BACKGROUND_EFFORT: z.enum(["low", "medium", "high", "xhigh", "max"]).default("low"),
 
-  EMBEDDINGS_PROVIDER: z.enum(["local", "voyage", "none", "hash"]).default("local"),
+  // On Vercel the local model (~300 MB of native runtime) doesn't fit a function bundle, so the
+  // default there is Voyage when a key is present, otherwise keyword-only search.
+  EMBEDDINGS_PROVIDER: z
+    .enum(["local", "voyage", "none", "hash"])
+    .default(process.env.VERCEL ? (process.env.VOYAGE_API_KEY ? "voyage" : "none") : "local"),
+  STORAGE_DRIVER: z
+    .enum(["local", "blob"])
+    .default(process.env.BLOB_READ_WRITE_TOKEN || process.env.BLOB_STORE_ID ? "blob" : "local"),
   VOYAGE_API_KEY: optionalString,
   VOYAGE_MODEL: z.string().default("voyage-3.5"),
   MODEL_CACHE_DIR: z.string().default("./data/models"),
@@ -50,4 +57,6 @@ function load(): Env {
 export const env: Env = load();
 
 export const isProd = env.NODE_ENV === "production";
+/** Running as a Vercel Function: no persistent disk, no always-on process. */
+export const isVercel = !!process.env.VERCEL;
 export const isTest = env.NODE_ENV === "test" || process.env.VITEST === "true";

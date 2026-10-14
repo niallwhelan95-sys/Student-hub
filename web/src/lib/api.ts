@@ -94,13 +94,44 @@ export async function postStream(
   }
 }
 
-export async function uploadFiles(files: File[], fields: Record<string, string | null | undefined> = {}) {
+type UploadResult = { results: { document?: import("./types").DocumentSummary; duplicate?: boolean; filename: string; error?: string }[] };
+
+/** Set from the signed-in session: when `direct` is true, files go browser → Vercel Blob (no 4.5 MB limit). */
+let uploadConfig: { direct: boolean; userId: string } | null = null;
+export const setUploadConfig = (c: typeof uploadConfig) => {
+  uploadConfig = c;
+};
+
+async function uploadDirect(files: File[], fields: Record<string, string | null | undefined>, userId: string): Promise<UploadResult> {
+  const { upload } = await import("@vercel/blob/client");
+  const results: UploadResult["results"] = [];
+  for (const file of files) {
+    try {
+      const safeName = file.name.replace(/[^\w.\- ]+/g, "_").slice(0, 120) || "upload";
+      const blob = await upload(`uploads/${userId}/${safeName}`, file, {
+        access: "private",
+        handleUploadUrl: `${BASE}/documents/blob-token`,
+        headers: { "x-margin-client": "1" },
+        multipart: file.size > 50 * 1024 * 1024,
+      });
+      const res = await api<UploadResult>("POST", "/documents/ingest-blob", {
+        pathname: blob.pathname,
+        filename: file.name,
+        moduleId: fields.moduleId || null,
+        conversationId: fields.conversationId || null,
+      });
+      results.push(...res.results);
+    } catch (err) {
+      results.push({ filename: file.name, error: err instanceof Error ? err.message : "Upload failed" });
+    }
+  }
+  return { results };
+}
+
+export async function uploadFiles(files: File[], fields: Record<string, string | null | undefined> = {}): Promise<UploadResult> {
+  if (uploadConfig?.direct) return uploadDirect(files, fields, uploadConfig.userId);
   const form = new FormData();
   for (const f of files) form.append("file", f);
   for (const [k, v] of Object.entries(fields)) if (v) form.append(k, v);
-  return api<{ results: { document?: import("./types").DocumentSummary; duplicate?: boolean; filename: string; error?: string }[] }>(
-    "POST",
-    "/documents",
-    form,
-  );
+  return api<UploadResult>("POST", "/documents", form);
 }

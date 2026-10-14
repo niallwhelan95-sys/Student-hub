@@ -1,6 +1,7 @@
 import { useEffect } from "react";
 import { BrowserRouter, Link, Navigate, Route, Routes, useLocation } from "react-router-dom";
 import { queryClient, useDashboard, useMe } from "./lib/queries";
+import { setUploadConfig } from "./lib/api";
 import { AppShell } from "./components/AppShell";
 import { Spinner } from "./components/ui";
 import { AuthPage } from "./pages/AuthPage";
@@ -54,6 +55,9 @@ export function App() {
     window.addEventListener("margin:unauthorized", onUnauthorized);
     return () => window.removeEventListener("margin:unauthorized", onUnauthorized);
   }, []);
+
+  // Tell the upload helper whether to use direct-to-storage uploads (Vercel) for this session.
+  setUploadConfig(me?.user ? { direct: me.capabilities.directUploads, userId: me.user.id } : null);
 
   if (isLoading)
     return (

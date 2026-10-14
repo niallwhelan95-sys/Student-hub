@@ -9,3 +9,6 @@ coverage/
 .DS_Store
 Thumbs.db
 .vite/
+# Vercel build output (generated)
+public/
+.vercel/

@@ -1,7 +1,8 @@
 import { sql } from "drizzle-orm";
+import { waitUntil } from "@vercel/functions";
 import { getDb, rows } from "../db/client";
 import { jobs } from "../db/schema";
-import { env } from "../env";
+import { env, isVercel } from "../env";
 
 /**
  * Durable, database-backed job queue. Jobs survive restarts (anything left "running" after a
@@ -48,11 +49,16 @@ export async function enqueue(
   return row.id;
 }
 
+/** A job still "running" after this long was abandoned (crash, or a serverless instance being frozen). */
+const STALE_RUNNING = sql`interval '10 minutes'`;
+
 async function claim(): Promise<JobRow | null> {
   const [job] = await rows<JobRow>(sql`
     UPDATE jobs SET status = 'running', attempts = attempts + 1, updated_at = now()
     WHERE id = (
-      SELECT id FROM jobs WHERE status = 'queued' AND run_after <= now()
+      SELECT id FROM jobs
+      WHERE (status = 'queued' AND run_after <= now())
+         OR (status = 'running' AND updated_at < now() - ${STALE_RUNNING} AND attempts < max_attempts)
       ORDER BY created_at LIMIT 1 FOR UPDATE SKIP LOCKED
     )
     RETURNING id, user_id, type, payload, attempts, max_attempts`);
@@ -102,7 +108,32 @@ let timer: NodeJS.Timeout | null = null;
 let running = false;
 let stopped = true;
 
+/**
+ * Serverless mode (Vercel): there is no always-on worker, so queued work runs after the
+ * current response via `waitUntil`, which keeps the function alive until it finishes.
+ */
+let serverlessDrain: Promise<unknown> | null = null;
+let lastKick = 0;
+
+function drainAfterResponse() {
+  if (serverlessDrain) return;
+  serverlessDrain = drainJobs(20)
+    .catch((err) => console.error("[jobs] serverless drain failed", err))
+    .finally(() => (serverlessDrain = null));
+  waitUntil(serverlessDrain);
+}
+
+/** Called on ordinary API traffic in serverless mode so retries and leftovers get picked up. */
+export function kickJobs(minIntervalMs = 15_000) {
+  if (!isVercel) return;
+  const now = Date.now();
+  if (now - lastKick < minIntervalMs) return;
+  lastKick = now;
+  drainAfterResponse();
+}
+
 function wake() {
+  if (isVercel) return drainAfterResponse();
   if (stopped || running) return;
   if (timer) clearTimeout(timer);
   timer = setTimeout(tick, 10);

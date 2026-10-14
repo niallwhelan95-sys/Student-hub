@@ -14,6 +14,7 @@ import { env } from "../env";
 import { getAI } from "../ai";
 import { getEmbedder } from "../embeddings";
 import { serverTranscriptionAvailable } from "../speech/service";
+import { getStorage } from "../storage";
 
 export const authRoutes = new Hono();
 
@@ -38,6 +39,7 @@ authRoutes.get("/me", async (c) => {
       ai: getAI().configured,
       semanticSearch: getEmbedder() !== null,
       serverTranscription: serverTranscriptionAvailable(),
+      directUploads: getStorage().kind === "blob",
       maxUploadMb: env.MAX_UPLOAD_MB,
     },
   });

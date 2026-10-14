@@ -8,7 +8,7 @@ import type { AppVariables } from "../auth/middleware";
 import { parseBody, parseQuery, isUuid } from "../lib/validate";
 import { AppError, badRequest, notFound } from "../lib/errors";
 import { env } from "../env";
-import { getStorage } from "../storage";
+import { getStorage, userPrefix } from "../storage";
 import { assignDocumentModule, deleteDocument, ingestUpload, reprocessDocument } from "../documents/service";
 import { DOCUMENT_KINDS } from "../documents/analyze";
 import { addWritingSample, WRITING_CONTEXTS } from "../writing/service";
@@ -92,6 +92,73 @@ documentRoutes.post(
   },
 );
 
+/**
+ * Vercel Blob client uploads (files go browser → private Blob store, bypassing the 4.5 MB
+ * function body limit). This issues a short-lived token only for the signed-in user's folder.
+ */
+documentRoutes.post("/blob-token", async (c) => {
+  const user = c.get("user");
+  if (getStorage().kind !== "blob") throw badRequest("Direct uploads aren't enabled on this server.");
+  const { handleUpload } = await import("@vercel/blob/client");
+  const body = await c.req.json();
+  const result = await handleUpload({
+    body,
+    request: c.req.raw,
+    onBeforeGenerateToken: async (pathname) => {
+      if (!pathname.startsWith(userPrefix(user.id)) || pathname.includes("..")) throw new Error("Invalid upload path");
+      return {
+        maximumSizeInBytes: env.MAX_UPLOAD_MB * 1024 * 1024,
+        addRandomSuffix: true,
+        tokenPayload: user.id,
+      };
+    },
+  });
+  return c.json(result);
+});
+
+/** Register a file the browser already uploaded to Blob storage, then validate and process it like any upload. */
+documentRoutes.post("/ingest-blob", async (c) => {
+  const user = c.get("user");
+  const body = await parseBody(
+    c,
+    z.object({
+      pathname: z.string().min(1).max(500),
+      filename: z.string().min(1).max(200),
+      moduleId: z.string().uuid().nullable().optional(),
+      conversationId: z.string().uuid().nullable().optional(),
+    }),
+  );
+  if (!body.pathname.startsWith(userPrefix(user.id)) || body.pathname.includes("..")) throw badRequest("Invalid upload");
+  if (body.conversationId) {
+    const [conv] = await getDb()
+      .select({ id: conversations.id })
+      .from(conversations)
+      .where(and(eq(conversations.id, body.conversationId), eq(conversations.userId, user.id)));
+    if (!conv) throw badRequest("Unknown conversation");
+  }
+  let data: Buffer;
+  try {
+    data = await getStorage().get(body.pathname);
+  } catch {
+    throw badRequest("The uploaded file couldn't be found — please try again.");
+  }
+  try {
+    const { document, duplicate } = await ingestUpload({
+      userId: user.id,
+      filename: body.filename,
+      data,
+      moduleId: body.moduleId ?? null,
+      conversationId: body.conversationId ?? null,
+      storedKey: body.pathname,
+    });
+    const { storageKey: _k, sha256: _s, userId: _u, ...pub } = document;
+    return c.json({ results: [{ document: pub, duplicate, filename: body.filename }] });
+  } catch (err) {
+    if (err instanceof AppError) return c.json({ results: [{ filename: body.filename, error: err.message }] });
+    throw err;
+  }
+});
+
 async function ownedDoc(userId: string, id: string) {
   if (!isUuid(id)) throw notFound("Document");
   const [doc] = await getDb().select().from(documents).where(and(eq(documents.id, id), eq(documents.userId, userId)));
@@ -122,9 +189,10 @@ documentRoutes.get("/:id", async (c) => {
 documentRoutes.get("/:id/file", async (c) => {
   const user = c.get("user");
   const doc = await ownedDoc(user.id, c.req.param("id"));
-  const data = await getStorage().get(doc.storageKey);
+  // Streamed rather than buffered: keeps memory flat and large files under platform response limits.
+  const data = await getStorage().stream(doc.storageKey);
   const inline = c.req.query("inline") === "1" && (doc.mimeType === "application/pdf" || doc.mimeType.startsWith("image/"));
-  return c.body(new Uint8Array(data), 200, {
+  return c.body(data, 200, {
     "content-type": doc.mimeType,
     "content-disposition": `${inline ? "inline" : "attachment"}; filename*=UTF-8''${encodeURIComponent(doc.filename)}`,
     "x-content-type-options": "nosniff",
