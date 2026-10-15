@@ -4,6 +4,7 @@ import { CheckCircle2, XCircle, Download, LogOut } from "lucide-react";
 import { del, get, patch, post } from "../lib/api";
 import { queryClient, useMe } from "../lib/queries";
 import { usePrefs } from "../lib/prefs";
+import { speak, speechSupported, useVoices } from "../lib/speech";
 import type { StudentProfile } from "../lib/types";
 import { Button, Card, Field, Input, Modal, PageHeader, Select, Spinner, Textarea, Toggle, cx } from "../components/ui";
 import { useToast } from "../components/toast";
@@ -39,6 +40,7 @@ export function SettingsPage() {
   const toast = useToast();
   const { data: me } = useMe();
   const [prefs, setPrefs] = usePrefs();
+  const voices = useVoices();
   const { data } = useQuery({ queryKey: ["profile"], queryFn: () => get<{ profile: StudentProfile }>("/profile") });
   const usage = useQuery({ queryKey: ["usage"], queryFn: () => get<{ usage: { purpose: string; model: string; calls: number; input: number; output: number; cache_read: number }[] }>("/account/usage") });
   const [form, setForm] = useState<Partial<StudentProfile> & { displayName?: string }>({});
@@ -195,6 +197,30 @@ export function SettingsPage() {
               </Select>
             </Field>
           </div>
+          {speechSupported() && (
+            <div className="space-y-3 border-t border-line pt-4">
+              <p className="text-sm font-medium">Read aloud</p>
+              <p className="text-xs text-muted">Highlight any text, or use the speaker button on a message, to have it read to you. Runs in your browser — nothing is sent anywhere.</p>
+              <div className="grid gap-4 sm:grid-cols-2">
+                <Field label="Voice">
+                  <Select value={prefs.ttsVoice} onChange={(e) => setPrefs({ ttsVoice: e.target.value })}>
+                    <option value="">Browser default</option>
+                    {voices.map((v) => (
+                      <option key={v.voiceURI} value={v.voiceURI}>
+                        {v.name} ({v.lang})
+                      </option>
+                    ))}
+                  </Select>
+                </Field>
+                <Field label={`Speed: ${prefs.ttsRate}×`}>
+                  <input type="range" min={0.6} max={1.6} step={0.05} value={prefs.ttsRate} onChange={(e) => setPrefs({ ttsRate: Number(e.target.value) })} className="h-11 w-full accent-[var(--accent)]" />
+                </Field>
+              </div>
+              <Button size="sm" variant="soft" onClick={() => speak("This is how Margin will read to you. You can change the voice and speed here.")}>
+                Test voice
+              </Button>
+            </div>
+          )}
           <Toggle checked={prefs.enterToSend} onChange={(v) => setPrefs({ enterToSend: v })} label="Enter sends messages" description="Off: Enter adds a new line and you click send. (Always off on touch screens.)" />
         </Card>
 

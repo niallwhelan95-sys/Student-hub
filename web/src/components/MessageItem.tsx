@@ -3,6 +3,7 @@ import { Link } from "react-router-dom";
 import { Copy, Check, RotateCcw, Pencil, Brain, ListTodo, Download, FileText, Mic, AlertTriangle, CalendarPlus } from "lucide-react";
 import type { Citation, Message } from "../lib/types";
 import { Markdown } from "./Markdown";
+import { ListenButton } from "./ReadAloud";
 import { Button, IconButton, Textarea, cx } from "./ui";
 
 export type MessageActions = {
@@ -121,6 +122,7 @@ export function MessageItem({
             <IconButton label="Copy" size="sm" onClick={copy}>
               {copied ? <Check className="size-3.5" /> : <Copy className="size-3.5" />}
             </IconButton>
+            <ListenButton getText={() => message.content} />
             {actions.onEdit && !streaming && (
               <IconButton label="Edit message" size="sm" onClick={() => setEditing(true)}>
                 <Pencil className="size-3.5" />
@@ -162,6 +164,7 @@ export function MessageItem({
           <IconButton label="Copy" size="sm" onClick={copy}>
             {copied ? <Check className="size-3.5" /> : <Copy className="size-3.5" />}
           </IconButton>
+          <ListenButton getText={() => selectedTextWithin(bodyEl) || message.content} />
           {isLast && actions.onRegenerate && (
             <IconButton label="Regenerate" size="sm" onClick={actions.onRegenerate}>
               <RotateCcw className="size-3.5" />

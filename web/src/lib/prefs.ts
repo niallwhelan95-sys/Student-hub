@@ -9,9 +9,12 @@ export type Prefs = {
   text: "small" | "medium" | "large";
   motion: "system" | "reduce";
   enterToSend: boolean;
+  /** Read-aloud speed (0.6–1.6) and chosen voice (empty = browser default). */
+  ttsRate: number;
+  ttsVoice: string;
 };
 
-const DEFAULTS: Prefs = { theme: "system", text: "medium", motion: "system", enterToSend: true };
+const DEFAULTS: Prefs = { theme: "system", text: "medium", motion: "system", enterToSend: true, ttsRate: 1, ttsVoice: "" };
 const KEY = "margin.prefs";
 
 function read(): Prefs {
@@ -45,7 +48,9 @@ export function setPrefs(patch: Partial<Prefs>) {
   listeners.forEach((l) => l(current));
 }
 
-export function usePrefs(): [Prefs, (patch: Partial<Prefs>) => void] {
+export const getPrefs = () => current;
+
+export function usePrefs():[Prefs, (patch: Partial<Prefs>) => void] {
   const [p, setP] = useState(current);
   useEffect(() => {
     listeners.add(setP);
