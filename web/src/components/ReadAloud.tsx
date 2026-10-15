@@ -101,7 +101,7 @@ export function ReadAloud() {
           data-readaloud-ui
           role="region"
           aria-label="Read aloud controls"
-          className="fixed inset-x-3 bottom-24 z-50 mx-auto flex max-w-md items-center gap-2 rounded-2xl border border-line bg-surface p-2 pl-3 shadow-soft sm:bottom-6"
+          className="fixed right-3 top-16 z-50 flex w-[min(26rem,calc(100vw-1.5rem))] items-center gap-2 rounded-2xl border border-line bg-surface p-2 pl-3 shadow-soft lg:right-6 lg:top-4"
         >
           <Volume2 className={cx("size-4 shrink-0 text-accent", speech.status === "speaking" && "recording-dot")} aria-hidden />
           <div className="min-w-0 flex-1">
@@ -145,7 +145,8 @@ export function ReadAloud() {
 export function ListenButton({ getText, size = "sm" }: { getText: () => string; size?: "sm" | "md" }) {
   const speech = useSpeech();
   if (!speechSupported()) return null;
-  const mine = speech.status !== "idle";
+  // Only the button whose text is being read shows "stop"; others start a new reading (replacing it).
+  const mine = speech.status !== "idle" && speech.text === getText();
   return (
     <IconButton
       label={mine ? "Stop reading aloud" : "Read aloud (select text first to hear just that part)"}
